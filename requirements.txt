@@ -1,0 +1,10 @@
+torch
+transformers
+Pillow
+requests
+opencv-python
+numpy
+plotly
+fastapi
+uvicorn
+matplotlib
