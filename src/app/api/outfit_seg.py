@@ -46,3 +46,19 @@ def segment_outfit(request: LabelRequest):
             "num_detections": 0,
             "error": str(e)
         }
+
+@router.get("/results")
+def list_segmentation_results():
+    results_dir = "results"
+    if not os.path.exists(results_dir):
+        return {"files": []}
+
+    files = sorted(os.listdir(results_dir))
+    file_urls = [
+        {
+            "filename": file,
+            "url": f"/results/{file}"
+        }
+        for file in files if file.endswith(".png")
+    ]
+    return {"files": file_urls}
