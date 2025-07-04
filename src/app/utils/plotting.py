@@ -9,7 +9,7 @@ import random
 import plotly.express as px
 import plotly.graph_objects as go
 
-from .image_ops import mask_to_polygon
+# from .image_ops import mask_to_polygon
 from .results import DetectionResult
 
 def annotate(image: Image.Image, detection_results: List[DetectionResult]) -> np.ndarray:
@@ -36,11 +36,11 @@ def annotate(image: Image.Image, detection_results: List[DetectionResult]) -> np
 
 def plot_detections(image: Image.Image, detections: List[DetectionResult], save_name: Optional[str] = None) -> None:
     annotated_image = annotate(image, detections)
-    # if save_name:
-    #     plt.imshow(annotated_image)
-    #     plt.axis('off')
-    #     plt.savefig(save_name, bbox_inches='tight')
-    #     plt.close()
+    if save_name:
+        plt.imshow(annotated_image)
+        plt.axis('off')
+        plt.savefig(save_name, bbox_inches='tight')
+        plt.close()
 
 def random_named_css_colors(num_colors: int) -> List[str]:
     named_css_colors = [
@@ -64,38 +64,39 @@ def random_named_css_colors(num_colors: int) -> List[str]:
     ] # (list panjang warna)
     return random.sample(named_css_colors, min(num_colors, len(named_css_colors)))
 
-def plot_detections_plotly(image: np.ndarray, detections: List[DetectionResult], class_colors: Optional[Dict[str, str]] = None) -> None:
-    if class_colors is None:
-        num_detections = len(detections)
-        colors = random_named_css_colors(num_detections)
-        class_colors = {i: colors[i] for i in range(num_detections)}
+# def plot_detections_plotly(image: np.ndarray, detections: List[DetectionResult], class_colors: Optional[Dict[str, str]] = None) -> None:
+#     if class_colors is None:
+#         num_detections = len(detections)
+#         colors = random_named_css_colors(num_detections)
+#         class_colors = {str(i): colors[i] for i in range(num_detections)}
 
-    fig = px.imshow(image)
+#     fig = px.imshow(image)
 
-    shapes = []
-    for idx, detection in enumerate(detections):
-        box = detection.box
-        polygon = mask_to_polygon(detection.mask)
-        fig.add_trace(go.Scatter(
-            x=[p[0] for p in polygon] + [polygon[0][0]],
-            y=[p[1] for p in polygon] + [polygon[0][1]],
-            mode="lines",
-            line=dict(color=class_colors[idx], width=2),
-            fill="toself",
-            name=f"{detection.label}: {detection.score:.2f}"
-        ))
+#     shapes = []
+#     for idx, detection in enumerate(detections):
+#         box = detection.box
+#         if detection.mask is not None:
+#             polygon = mask_to_polygon(detection.mask)
+#             fig.add_trace(go.Scatter(
+#                 x=[p[0] for p in polygon] + [polygon[0][0]],
+#                 y=[p[1] for p in polygon] + [polygon[0][1]],
+#                 mode="lines",
+#                 line=dict(color=class_colors[str(idx)], width=2),
+#                 fill="toself",
+#                 name=f"{detection.label}: {detection.score:.2f}"
+#             ))
 
-        shape = [dict(
-            type="rect",
-            xref="x", yref="y",
-            x0=box.xmin, y0=box.ymin,
-            x1=box.xmax, y1=box.ymax,
-            line=dict(color=class_colors[idx])
-        )]
-        shapes.append(shape)
+#         shape = [dict(
+#             type="rect",
+#             xref="x", yref="y",
+#             x0=box.xmin, y0=box.ymin,
+#             x1=box.xmax, y1=box.ymax,
+#             line=dict(color=class_colors[str(idx)])
+#         )]
+#         shapes.append(shape)
 
-    fig.update_layout(showlegend=True)
-    fig.show()
+#     fig.update_layout(showlegend=True)
+#     fig.show()
 
 
 
