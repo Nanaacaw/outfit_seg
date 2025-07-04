@@ -6,6 +6,7 @@ import torch
 import numpy as np
 import cv2
 from typing import List, Tuple
+from io import BytesIO
 
 from .results import DetectionResult
 
@@ -15,7 +16,7 @@ def mask_to_polygon(mask: np.ndarray) -> List[List[int]]:
     polygon = largest_contour.reshape(-1, 2).tolist()
     return polygon
 
-def polygon_to_mask(polygon: List[Tuple[int, int]], image_shape: Tuple[int, int]) -> np.ndarray:
+def polygon_to_mask(polygon: List[List[int]], image_shape: Tuple[int, int]) -> np.ndarray:
     mask = np.zeros(image_shape, dtype=np.uint8)
     pts = np.array(polygon, dtype=np.int32)
     cv2.fillPoly(mask, [pts], color=(255,))
@@ -23,7 +24,8 @@ def polygon_to_mask(polygon: List[Tuple[int, int]], image_shape: Tuple[int, int]
 
 def load_image(image_str: str) -> Image.Image:
     if image_str.startswith("http"):
-        image = Image.open(requests.get(image_str, stream=True).raw).convert("RGB")
+        response = requests.get(image_str, stream=True)
+        image = Image.open(BytesIO(response.content)).convert("RGB")
     else:
         image = Image.open(image_str).convert("RGB")
     return image
@@ -34,19 +36,19 @@ def get_boxes(results: List[DetectionResult]) -> List[List[List[float]]]:
         boxes.append(result.box.xyxy)
     return [boxes]
 
-def refine_masks(masks: torch.BoolTensor, polygon_refinement: bool = False) -> List[np.ndarray]:
+def refine_masks(masks: torch.Tensor, polygon_refinement: bool = False) -> List[np.ndarray]:
     masks = masks.cpu().float()
     masks = masks.permute(0, 2, 3, 1)
-    masks = masks.mean(axis=-1)
+    masks = masks.mean(dim=-1)
     masks = (masks > 0).int()
-    masks = masks.numpy().astype(np.uint8)
-    masks = list(masks)
+    masks_np = masks.numpy().astype(np.uint8)
+    masks_list = list(masks_np)
 
     if polygon_refinement:
-        for idx, mask in enumerate(masks):
-            shape = mask.shape
+        for idx, mask in enumerate(masks_list):
+            shape = tuple(mask.shape)
             polygon = mask_to_polygon(mask)
-            mask = polygon_to_mask(polygon, shape)
-            masks[idx] = mask
+            refined_mask = polygon_to_mask(polygon, shape)
+            masks_list[idx] = refined_mask
 
-    return masks
+    return masks_list
