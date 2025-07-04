@@ -12,6 +12,8 @@ from PIL import Image
 
 router = APIRouter()
 
+DEFAULT_LABELS = ["person", "shirt", "pant", "shoe", "sandal", "headscarf", "watch", "glasses", "skirt", "vest", "hat"]
+
 @router.post("/segment")
 def segment_outfit(request: LabelRequest):
     try:
@@ -19,9 +21,13 @@ def segment_outfit(request: LabelRequest):
         threshold = request.threshold if request.threshold is not None else DEFAULT_THRESHOLD
         polygon_refinement = request.polygon_refinement if request.polygon_refinement is not None else True
 
+        # Use labels from request if not None, otherwise use default labels
+        labels = request.labels if request.labels is not None else DEFAULT_LABELS
+        labels = [label if label.endswith(".") else label + "." for label in labels]
+
         image_array, detections = grounded_segmentation(
             image=request.image_url,
-            labels=request.labels,
+            labels=labels,
             threshold=threshold,
             polygon_refinement=polygon_refinement,
             detector_id=DETECTOR_ID,
