@@ -1,13 +1,14 @@
 # app/api/outfit_seg.py
 
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile, File, Form
 from app.schemas.segmentation import LabelRequest
 from app.services.segmentation_service import grounded_segmentation
 from app.utils.plotting import plot_detections
-import os
+import os, io
 from datetime import datetime
 from app.settings.setting import DEFAULT_THRESHOLD, DETECTOR_ID, SEGMENTER_ID
 from PIL import Image
+from typing import List, Optional
 
 
 router = APIRouter()
@@ -48,6 +49,55 @@ def segment_outfit(request: LabelRequest):
             "status": "completed",
             "data": {
                 "image_url": request.image_url,
+                "num_detections": len(detections),
+                "saved_file": filename
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "failed",
+            "num_detections": 0,
+            "error": str(e)
+        }
+@router.post("/segment-local")
+async def segment_local(
+    file: UploadFile = File(...), 
+    labels: Optional[List[str]] = None,
+    threshold: float = Form(DEFAULT_THRESHOLD),
+    polygon_refinement: Optional[bool] = Form(None)
+):
+    try:
+        # Read content of the file
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents)).convert("RGB")
+
+        # Use labels from request if not None, otherwise use default labels
+        labels = labels if labels is not None else DEFAULT_LABELS
+        labels = [label if label.endswith(".") else label + "." for label in labels]
+
+        # Use polygon refinement from request if not None, otherwise use True   
+        polygon_refinement = polygon_refinement if polygon_refinement is not None else True
+
+        image_array, detections = grounded_segmentation(
+            image=image,
+            labels=labels,
+            threshold=threshold,
+            polygon_refinement=polygon_refinement,
+            detector_id=DETECTOR_ID,
+            segmenter_id=SEGMENTER_ID
+        )
+
+        results_dir = "results"
+        os.makedirs(results_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{results_dir}/segmentation_local_{timestamp}.png"
+
+        image_pil = Image.fromarray(image_array)
+        plot_detections(image_pil, detections, save_name=filename)
+
+        return {
+            "status": "completed",
+            "data": {
                 "num_detections": len(detections),
                 "saved_file": filename
             }
