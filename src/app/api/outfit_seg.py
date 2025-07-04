@@ -4,7 +4,7 @@ from fastapi import APIRouter, UploadFile, File, Form
 from app.schemas.segmentation import LabelRequest
 from app.services.segmentation_service import grounded_segmentation
 from app.utils.plotting import plot_detections
-import os, io
+import os, io, torch, platform, psutil
 from datetime import datetime
 from app.settings.setting import DEFAULT_THRESHOLD, DETECTOR_ID, SEGMENTER_ID
 from PIL import Image
@@ -124,3 +124,24 @@ def list_segmentation_results():
         for file in files if file.endswith(".png")
     ]
     return {"files": file_urls}
+
+@router.get("/status")
+def check_status():
+    try:
+        # Check cuda
+        cuda_available = torch.cuda.is_available()
+        cuda_device = torch.cuda.get_device_name(0) if cuda_available else None
+
+        return {
+            "status": "ok",
+            "cuda_available": cuda_available,
+            "device_name": cuda_device if cuda_available else "CPU",
+            "torch_version": torch.__version__,
+            "platform": platform.system(),
+            "memory_usage_percent": psutil.virtual_memory().percent
+        }
+    except Exception as e:
+        return {
+            "status": "failed",
+            "error": str(e)
+        }
