@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+
 # Import router dari app.api
-from src.app.api.outfit_seg import router as outfit_seg
+from src.app.api.full_detection_api import router as full_detection_api
 
 app = FastAPI(
     title="Outfit Detection API",
@@ -10,7 +11,7 @@ app = FastAPI(
 )
 
 # Register router
-app.include_router(outfit_seg)
+app.include_router(full_detection_api)
 
 # Mount static files
 app.mount("/results", StaticFiles(directory="results", html=True), name="results")
