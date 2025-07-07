@@ -3,7 +3,7 @@
 from typing import Any, Dict, List, Optional
 from PIL import Image
 import torch
-from transformers import pipeline
+from transformers.pipelines import pipeline
 
 from app.utils.results import DetectionResult
 from app.settings.setting import DETECTOR_ID, DEFAULT_THRESHOLD
