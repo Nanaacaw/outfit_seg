@@ -5,11 +5,16 @@ from datetime import datetime
 from PIL import Image
 import os, json, torch, platform, psutil, numpy as np
 from io import BytesIO
+import logging
+from src.app.utils.logger_utils import get_logger, debug_log
+
+logger = get_logger(__name__)
 
 from app.services.segmentation_service import grounded_segmentation
 from app.utils.plotting import plot_detections
 from app.settings.setting import DEFAULT_THRESHOLD, DETECTOR_ID, SEGMENTER_ID
 from app.utils.image_ops import load_image
+from app.utils.postprocess import remove_multilabel_same_area, compute_iou
 
 router = APIRouter()
 
@@ -24,6 +29,7 @@ async def detect (
     polygon_refinement: Optional[bool] = Form(True)
 ):
     try:
+        debug_log("/detect request received", logger)
         # Handle labels
         label_list = labels.split(",") if labels else DEFAULT_LABELS
         if not any(l.lower() == "person" for l in label_list):
@@ -48,6 +54,7 @@ async def detect (
         threshold = threshold if threshold is not None else DEFAULT_THRESHOLD
         polygon_refinement = polygon_refinement if polygon_refinement is not None else True
 
+        debug_log(f"Detection started for image: {image_source}", logger)
         image_array, detections = grounded_segmentation(
             image=image_pil,
             labels=label_list,
@@ -56,6 +63,17 @@ async def detect (
             detector_id=DETECTOR_ID,
             segmenter_id=SEGMENTER_ID
         )
+        debug_log(f"Detection completed: {len(detections)} detections", logger)
+
+        # Filter by score threshold
+        detections = [d for d in detections if d.score >= threshold]
+
+        # Separate detections into persons and outfit items
+        persons = [d for d in detections if d.label.lower().strip().rstrip('.') == 'person']
+        items = [d for d in detections if d.label.lower().strip().rstrip('.') != 'person']
+
+        # Filter overlapping items (only keep highest score per area)
+        items = remove_multilabel_same_area(items, iou_threshold=0.5)
 
         # Get image size
         img_width, img_height = image_pil.size
@@ -66,10 +84,6 @@ async def detect (
             w = (xmax - xmin) / img_width
             h = (ymax - ymin) / img_height
             return [round(x, 4), round(y, 4), round(w, 4), round(h, 4)]
-
-        # Separate detections into persons and outfit items
-        persons = [d for d in detections if d.label.lower().strip().rstrip('.') == 'person']
-        items = [d for d in detections if d.label.lower().strip().rstrip('.') != 'person']
 
         # Build results
         results = []
@@ -82,7 +96,8 @@ async def detect (
                     outfits.append({
                         "text_prompt": item.label,
                         "box": normalize_box(ixmin, iymin, ixmax, iymax),
-                        "confidence": round(item.score, 4)
+                        "confidence": round(item.score, 4),
+                        "iou_with_person": round(compute_iou([pxmin, pymin, pxmax, pymax], [ixmin, iymin, ixmax, iymax]), 4)
                     })
 
             results.append({
@@ -117,8 +132,8 @@ async def detect (
             json.dump(response, f, indent=2)
 
         return response
-
     except Exception as e:
+        logger.error("Detection failed: %s", str(e))
         return {
             "input_type": "url",
             "status": "failed",
@@ -129,11 +144,11 @@ async def detect (
 def get_specific_result(filename: str = Query(..., description="Filename of the image result to fetch")):
     results_dir = "results"
     
-    if not filename.endswith(".png"):
-        return {"error": "Only .png image filenames are allowed."}
+    if not (filename.endswith(".png") or filename.endswith(".jpg") or filename.endswith(".webp")):
+        return {"error": "Only .png, .jpg, .webp image filenames are allowed."}
     
     image_path = os.path.join(results_dir, filename)
-    json_path = image_path.replace(".png", ".json")
+    json_path = os.path.splitext(image_path)[0] + ".json"
 
     if not os.path.exists(image_path) or not os.path.exists(json_path):
         return {"error": "File not found."}
