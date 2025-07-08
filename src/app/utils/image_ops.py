@@ -1,14 +1,13 @@
 # app/utils/image_ops.py
 
 from PIL import Image
-import requests
 import torch
 import numpy as np
 import cv2
 from typing import List, Tuple
-from io import BytesIO
 
 from .results import DetectionResult
+from .s3_helper import download_from_s3
 
 def mask_to_polygon(mask: np.ndarray) -> List[List[int]]:
     contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -23,9 +22,9 @@ def polygon_to_mask(polygon: List[List[int]], image_shape: Tuple[int, int]) -> n
     return mask
 
 def load_image(image_str: str) -> Image.Image:
-    if image_str.startswith("http"):
-        response = requests.get(image_str, stream=True)
-        image = Image.open(BytesIO(response.content)).convert("RGB")
+    if image_str.startswith("http") or image_str.startswith("s3://"):
+        local_path = download_from_s3(image_str)
+        image = Image.open(local_path).convert("RGB")
     else:
         image = Image.open(image_str).convert("RGB")
     return image
