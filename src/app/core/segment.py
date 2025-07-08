@@ -1,4 +1,4 @@
-# app/core/segment_utils.py
+# app/core/segment.py
 
 from typing import Any, Dict, List, Optional
 from PIL import Image
