@@ -3,14 +3,13 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query
 from typing import Optional
 from datetime import datetime
 from PIL import Image
-import os, json, torch, platform, psutil, numpy as np
+import os, json, torch, platform, psutil, numpy as np, aiofiles, asyncio
 from io import BytesIO
-import logging
 from src.app.utils.logger_utils import get_logger, debug_log
 
 logger = get_logger(__name__)
 
-from app.services.segmentation_service import grounded_segmentation
+from src.app.services.segmentation_service import grounded_segmentation
 from app.utils.plotting import plot_detections
 from app.settings.setting import DEFAULT_THRESHOLD, DETECTOR_ID, SEGMENTER_ID
 from app.utils.image_ops import load_image
@@ -18,7 +17,7 @@ from app.utils.postprocess import remove_multilabel_same_area, compute_iou
 
 router = APIRouter()
 
-DEFAULT_LABELS = ["person.", "shirt.", "pant.", "shoe.", "sandal.", "headscarf.", "watch.", "glasses.", "skirt.", "vest.", "hat."]
+DEFAULT_LABELS = ["shirt.", "pant.", "shoe.", "sandal.", "headscarf.", "watch.", "glasses.", "skirt.", "vest.", "hat."]
 
 @router.post("/detect")
 async def detect (
@@ -38,7 +37,7 @@ async def detect (
 
         # Load image
         if image_url:
-            image_pil = load_image(image_url)
+            image_pil = await load_image(image_url)
             input_type = "url"
             image_source = image_url
         elif file:
@@ -55,7 +54,7 @@ async def detect (
         polygon_refinement = polygon_refinement if polygon_refinement is not None else True
 
         debug_log(f"Detection started for image: {image_source}", logger)
-        image_array, detections = grounded_segmentation(
+        image_array, detections = await grounded_segmentation(
             image=image_pil,
             labels=label_list,
             threshold=threshold,
@@ -113,7 +112,9 @@ async def detect (
 
         image_filename = f"{results_dir}/detection_{timestamp}.png"
         json_filename = f"{results_dir}/detection_{timestamp}.json"
-        plot_detections(image_pil, detections, save_name=image_filename)
+        
+        # Run plotting in thread pool
+        await asyncio.to_thread(plot_detections, image_pil, detections, image_filename)
 
         response = {
             "input_type": input_type,
@@ -128,8 +129,8 @@ async def detect (
             }
         }
 
-        with open(json_filename, "w", encoding="utf-8") as f:
-            json.dump(response, f, indent=2)
+        # Run file writing in thread pool
+        await asyncio.to_thread(lambda: json.dump(response, open(json_filename, "w", encoding="utf-8"), indent=2))
 
         return response
     except Exception as e:
@@ -141,7 +142,7 @@ async def detect (
         }
 
 @router.get("/results")
-def get_specific_result(filename: str = Query(..., description="Filename of the image result to fetch")):
+async def get_specific_result(filename: str = Query(..., description="Filename of the image result to fetch")):
     results_dir = "results"
     
     if not (filename.endswith(".png") or filename.endswith(".jpg") or filename.endswith(".webp")):
@@ -153,8 +154,9 @@ def get_specific_result(filename: str = Query(..., description="Filename of the 
     if not os.path.exists(image_path) or not os.path.exists(json_path):
         return {"error": "File not found."}
 
-    with open(json_path, "r", encoding="utf-8") as f:
-        result_data = json.load(f)
+    async with aiofiles.open(json_path, "r", encoding="utf-8") as f:
+        content = await f.read()
+        result_data = json.loads(content)
 
     return {
         "filename": filename,

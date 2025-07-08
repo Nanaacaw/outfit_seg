@@ -1,5 +1,8 @@
 import os
-from src.app.utils import suppress_tensorflow_warnings
+import matplotlib
+matplotlib.use('Agg')  # Set non-GUI backend for matplotlib
+
+from src.app.utils.tensorflow_config import suppress_tensorflow_warnings
 
 # Suppress TensorFlow warnings early
 suppress_tensorflow_warnings()

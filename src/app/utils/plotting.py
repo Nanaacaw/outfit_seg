@@ -1,5 +1,8 @@
 # app/utils/plotting.py
 
+import matplotlib
+matplotlib.use('Agg')  # Set non-GUI backend before importing pyplot
+
 from typing import List, Optional, Dict
 import numpy as np
 import cv2

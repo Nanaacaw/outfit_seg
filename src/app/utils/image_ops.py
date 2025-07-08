@@ -5,6 +5,7 @@ import torch
 import numpy as np
 import cv2
 from typing import List, Tuple
+import asyncio
 
 from .results import DetectionResult
 from .s3_helper import download_from_s3
@@ -21,13 +22,13 @@ def polygon_to_mask(polygon: List[List[int]], image_shape: Tuple[int, int]) -> n
     cv2.fillPoly(mask, [pts], color=(255,))
     return mask
 
-def load_image(image_str: str) -> Image.Image:
+async def load_image(image_str: str) -> Image.Image:
     if image_str.startswith("http") or image_str.startswith("s3://"):
-        local_path = download_from_s3(image_str)
+        local_path = await download_from_s3(image_str)
         image = Image.open(local_path).convert("RGB")
+        return image
     else:
-        image = Image.open(image_str).convert("RGB")
-    return image
+        return await asyncio.to_thread(lambda: Image.open(image_str).convert("RGB"))
 
 def get_boxes(results: List[DetectionResult]) -> List[List[List[float]]]:
     boxes = []
